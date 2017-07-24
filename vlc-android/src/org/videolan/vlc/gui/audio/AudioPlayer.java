@@ -20,17 +20,26 @@
 
 package org.videolan.vlc.gui.audio;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.*;
+
+import org.videolan.medialibrary.Medialibrary;
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.databinding.generated.callback.OnClickListener;
 import android.graphics.Bitmap;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
@@ -40,6 +49,7 @@ import android.support.constraint.ConstraintSet;
 import android.support.design.widget.BottomSheetBehavior;
 import android.support.design.widget.Snackbar;
 import android.support.transition.TransitionManager;
+import android.support.v4.app.DialogFragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.widget.LinearLayoutManager;
@@ -48,20 +58,28 @@ import android.support.v7.widget.helper.ItemTouchHelper;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.util.AndroidUtil;
 import org.videolan.medialibrary.Tools;
 import org.videolan.medialibrary.media.MediaWrapper;
+import org.videolan.vlc.ClipActivity;
 import org.videolan.vlc.PlaybackService;
 import org.videolan.vlc.R;
 import org.videolan.vlc.VLCApplication;
@@ -69,14 +87,42 @@ import org.videolan.vlc.databinding.AudioPlayerBinding;
 import org.videolan.vlc.gui.AudioPlayerContainerActivity;
 import org.videolan.vlc.gui.PlaybackServiceFragment;
 import org.videolan.vlc.gui.dialogs.AdvOptionsDialog;
+import org.videolan.vlc.gui.dialogs.ClipFragment;
+import org.videolan.vlc.gui.dialogs.DataObject;
+import org.videolan.vlc.gui.dialogs.JumpToTimeDialog;
 import org.videolan.vlc.gui.helpers.AudioUtil;
 import org.videolan.vlc.gui.helpers.SwipeDragItemTouchHelperCallback;
 import org.videolan.vlc.gui.helpers.UiTools;
 import org.videolan.vlc.gui.preferences.PreferencesActivity;
 import org.videolan.vlc.gui.view.AudioMediaSwitcher.AudioMediaSwitcherListener;
+import org.videolan.vlc.media.MediaDatabase;
 import org.videolan.vlc.util.AndroidDevices;
+import org.videolan.vlc.util.Strings;
 
-public class AudioPlayer extends PlaybackServiceFragment implements PlaybackService.Callback, PlaylistAdapter.IPlayer, TextWatcher {
+public class AudioPlayer extends PlaybackServiceFragment implements PlaybackService.Callback, PlaylistAdapter.IPlayer, TextWatcher,
+        ClipFragment.OnOkButtonClickListener{
+
+
+    public static ArrayList<DataObject> dataString = new ArrayList<DataObject>();
+
+    public long begTime = 0;
+    public long endTime = 30000*1000;
+    public String strEtime="";
+
+
+    public static long sbegTime = 0;
+    public static long sendTime = 30000*1000;
+    public static String sstrEtime="";
+
+
+    public static String title_1 = "";
+    public static String loc_1 = "";
+
+    protected static long MILLIS_IN_MICROS = 1000;
+    protected static long SECONDS_IN_MICROS = 1000 * MILLIS_IN_MICROS;
+    protected static long MINUTES_IN_MICROS = 60 * SECONDS_IN_MICROS;
+    protected static long HOURS_IN_MICROS = 60 * MINUTES_IN_MICROS;
+
     public static final String TAG = "VLC/AudioPlayer";
 
     private static int DEFAULT_BACKGROUND_DARKER_ID;
@@ -148,6 +194,31 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
             coverConstraintSet.setVisibility(R.id.songs_list, View.GONE);
             coverConstraintSet.setVisibility(R.id.cover_media_switcher, View.VISIBLE);
         }
+
+
+        ((Button) view.findViewById(R.id.buttonInv3)).setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                // When button is clicked, call up to owning activity.
+                //caller.doCancelConfirmClick();
+
+                onBtnInv3(view);
+            }
+        });
+
+
+        ImageView fashionImg = (ImageView) view.findViewById(R.id.Trim2);
+        // set a onclick listener for when the button gets clicked
+        fashionImg.setOnClickListener(new View.OnClickListener() {
+            // Start new list activity
+            public void onClick(View v) {
+                Log.d("audior","rocking!!");
+                onTrim(view);
+
+            }
+        });
+
+
+
     }
 
     public void onPopupMenu(View anchor, final int position) {
@@ -254,8 +325,40 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
     public void updateProgress() {
         if (mService == null)
             return;
+
         int time = (int) mService.getTime();
+
+        if (time > endTime) {
+            mService.pause();
+            String st2 = "";
+            System.out.println(st2);
+
+            /*
+            MediaDatabase db = MediaDatabase.getInstance();
+            st2 = db.getClips();
+
+            String st3 = mService.getTitle();
+            String st4 = mService.getMediaLocations().get(0);
+
+            db.putClips(st3,st4,"33-43||");
+
+
+            List<String> n1 =  mService.getMediaLocations();
+
+            String st2 = n1.get(0);
+            for(int i = 0; i < n1.size(); i++) {
+                System.out.println(n1.get(i));
+
+            }
+            n1.add(1,"hello");
+            */
+            System.out.println(st2+"te2");
+
+
+        }
+
         int length = (int) mService.getLength();
+        //System.out.println("length="+length);
 
         mBinding.headerTime.setText(Tools.millisToString(time));
         mBinding.length.setText(Tools.millisToString(length));
@@ -368,8 +471,424 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
         if (mService.isPlaying()) {
             mService.pause();
         } else {
+            Log.d("audior",""+endTime);
+            //endTime = 30000*1000;
+            endTime = convTime(sstrEtime);
             mService.play();
         }
+    }
+
+
+    public void onComplete(ArrayList<DataObject> data) {
+
+        DataObject d1 = data.get(0);
+
+        System.out.println(d1.getmText1());
+        dataString   = data;
+
+    }
+
+    public void passData(ArrayList<DataObject> data){
+
+
+        dataString   = data;
+
+        /*
+        MediaDatabase db = MediaDatabase.getInstance();
+        db.getClips(title_1,loc_1);
+
+        stArr.add("00:01:20-00:01:35");
+*/
+
+        String st9 = "";
+        for (int j = 0; j < data.size(); j++) {
+            DataObject d1 = data.get(j);
+            String a1 = d1.getmText1();
+            String a2 = d1.getmText2();
+            String a3 = d1.getmText3();
+            if (convTime(a2) > convTime(sstrEtime)) {
+               // a2 = convVerStr(Tools.millisToString(endTime));
+                a2 = sstrEtime;
+                //a2 = convVerStr(Tools.millisToString(sendTime));
+            }
+            if (convTime(a2) < convTime(a1)) {
+                // a2 = convVerStr(Tools.millisToString(endTime));
+                a2 = sstrEtime;
+                //a2 = convVerStr(Tools.millisToString(sendTime));
+            }
+            if (convTime(a1) > convTime(a2)) {
+                // a2 = convVerStr(Tools.millisToString(endTime));
+                a1 = "00:00:00";
+                //a2 = convVerStr(Tools.millisToString(sendTime));
+            }
+
+
+            if (a3.equals("#9"))
+                a3 = "";
+            String a4 = a1+"-"+a2+"-"+a3;
+            st9 = st9+a4 + ";";
+        }
+
+
+        MediaDatabase db = MediaDatabase.getInstance();
+
+        Log.d("DB_1","database before insert");
+        db.getClips2();
+        db.putClips3(loc_1,title_1,st9);
+        db.putClips4();
+        Log.d("DB_1","database after insert");
+        db.getClips2();
+
+    }
+
+    public long convTime(String st3){
+
+
+
+        String t1[] = st3.split(":");
+
+
+        String mHours=t1[0],mMinutes=t1[1],mSeconds=t1[2];
+        long hours, minutes, seconds;
+
+        hours = !mHours.equals("") ? Long.parseLong(mHours) * HOURS_IN_MICROS : 0l;
+        minutes = !mMinutes.equals("") ? Long.parseLong(mMinutes) * MINUTES_IN_MICROS : 0l;
+        seconds = !mSeconds.equals("") ? Long.parseLong(mSeconds) * SECONDS_IN_MICROS : 0l;
+
+
+        long time = (hours+minutes+seconds)/1000l;
+        return time;
+
+    }
+
+
+
+    public void onBtnInv3(View v2){
+
+        Button b2 = ((Button) v2.findViewById(R.id.buttonInv3));
+
+
+        String t3 =  b2.getTag(R.string.name)+"";
+        int p1 = Integer.parseInt(t3);
+
+        DataObject d1 = dataString.get(p1);
+
+        String t1[] = (d1.getmText1()).split(":");
+
+
+        String mHours=t1[0],mMinutes=t1[1],mSeconds=t1[2];
+        long hours, minutes, seconds;
+
+        hours = !mHours.equals("") ? Long.parseLong(mHours) * HOURS_IN_MICROS : 0l;
+        minutes = !mMinutes.equals("") ? Long.parseLong(mMinutes) * MINUTES_IN_MICROS : 0l;
+        seconds = !mSeconds.equals("") ? Long.parseLong(mSeconds) * SECONDS_IN_MICROS : 0l;
+
+
+        begTime = (hours+minutes+seconds)/1000l;
+        System.out.println(" h="+ hours+" m="+ minutes+" s= "+ seconds + " beg "+begTime);
+
+
+        String t2[] = (d1.getmText2()).split(":");
+        mHours=t2[0];
+        mMinutes=t2[1];
+        mSeconds=t2[2];
+
+        hours = !mHours.equals("") ? Long.parseLong(mHours) * HOURS_IN_MICROS : 0l;
+        minutes = !mMinutes.equals("") ? Long.parseLong(mMinutes) * MINUTES_IN_MICROS : 0l;
+        seconds = !mSeconds.equals("") ? Long.parseLong(mSeconds) * SECONDS_IN_MICROS : 0l;
+
+        endTime = (hours+minutes+seconds)/1000l;
+        sendTime = endTime;
+
+        if (endTime > convTime(sstrEtime)) {
+            endTime = convTime(sstrEtime);
+        }
+        if (endTime < begTime) {
+            endTime = convTime(sstrEtime);
+
+        }
+        if (begTime > endTime) {
+            begTime = convTime("00:00:00");
+        }
+
+
+/*
+        if (mService.isPlaying()) {
+
+            mService.pause();
+            mService.setTime(begTime);
+            mService.play();
+            //updateProgress();
+        } else {
+            mService.setTime(begTime);
+            mService.play();
+            //updateProgress();
+        }
+*/
+        mService.pause();
+        mService.setTime(begTime);
+        updateProgress();
+        mService.play();
+
+
+    }
+
+    public String convVerStr(String st3){
+
+        String t4[] = st3.split(":");
+        String hh="", mm="",ss="";
+
+
+        //0:023 where 0=t4[0] and 023 is t4[1]
+        //90:9:02 where 90=t4[0] and 9 is t4[1] and 023 is t4[2]
+        String validStr = "";
+
+        int ln1 = st3.indexOf(":");
+        ln1 = st3.length() - st3.replace(":", "").length();
+
+        if (ln1<1 || ln1>2){
+            Log.d("T9", "Error "+ln1);
+            validStr = "Err";
+        }
+        else {
+            //0:023 where 0=t4[0] and 023 is t4[1]
+
+            if (ln1 == 1) {
+                if (t4[0].length()>2 || t4[1].length()>2)
+                    validStr = "Err";
+                else {
+                    hh="00";
+                    mm=t4[0];
+                    ss=t4[1];
+
+                    if (mm.length() == 1) {
+                        //i.e 1:23 then add "0" to 1 and make it 01:23
+                        validStr = "0" + t4[0] + ":" ;
+                        mm = "0"+mm;
+
+                    }
+                    else
+                        validStr = validStr + mm + ":";
+                    if (ss.length() == 1) {
+                        //i.e 01:2 then add "0" to 2 and make it 01:20
+                        validStr = validStr + ":" + "0" + ss ;
+                        ss = "0"+ss;
+                    }
+                    else
+                        validStr = validStr  +ss;
+
+
+                    validStr = hh + ":"+ validStr;
+                    Log.d("T9", "suc1 "+validStr);
+
+                }
+
+            }
+            if (ln1 == 2) {
+                //0:01:02
+                if (t4[0].length()>2 || t4[1].length()>2 || t4[2].length()>2)
+                    validStr = "Err";
+                else {
+                    hh=t4[0];
+                    mm=t4[1];
+                    ss=t4[2];
+
+                    if (hh.length() == 1) {
+                        validStr = "0" + t4[0] + ":" ;
+                        hh = "0"+hh;
+
+                    }
+                    else
+                        validStr = validStr + hh + ":";
+
+                    if (mm.length() == 1) {
+                        //i.e 1:23 then add "0" to 1 and make it 01:23
+                        validStr = validStr+ ":"+ "0" + t4[1];
+                        mm = "0"+mm;
+
+                    }
+                    else
+                        validStr = validStr + mm + ":";
+
+                    if (ss.length() == 1) {
+                        //i.e 01:2 then add "0" to 2 and make it 01:20
+                        validStr = validStr + "0" + ss ;
+                        ss = "0"+ss;
+                    }
+                    else
+                        validStr = validStr  +ss;
+
+                    Log.d("T9", "suc2 "+validStr);
+
+                }
+
+            }
+
+        }
+
+        if (validStr.equals("Err") == false) {
+            String t5[] = validStr.split(":");
+            boolean strEr = false;
+
+            if (Integer.parseInt(t5[0]) > 99 || Integer.parseInt(t5[1]) > 59 || Integer.parseInt(t5[2]) > 59) {
+                strEr = true;
+                validStr = "Err";
+                Log.d("T9", "Error2 " + validStr);
+
+            }
+        }
+
+        Log.d("T9", "Return - "+validStr);
+
+
+
+        return validStr;
+    }
+
+
+
+    public void onTrim(View view){
+        //startActivity(new Intent(VLCApplication.getAppContext(), ClipActivity.class));
+        try {
+
+            if (mService == null)
+            return;
+
+
+            title_1 = mService.getTitle();
+            loc_1 = mService.getMediaLocations().get(0);
+            MediaDatabase db = MediaDatabase.getInstance();
+            Log.d("DB_2",title_1+"1t-2l"+loc_1);
+
+
+             //db.deleteClipTable();
+
+
+
+         //  db.putClips3(loc_1,title_1,"00:01:20-00:01:35;00:00:20-00:01:35;");
+
+    /*
+            db.putClips3(loc_1,title_1,"string-1");
+            db.getClips2();
+            db.putClips3(loc_1,title_1,"string-3");
+            db.getClips2();
+    */
+
+
+            //db.putClips(title_1,loc_1,"test2");
+
+            String valString = db.getClips3(loc_1);
+
+
+            if (valString.equals("")) {
+                dataString.clear();
+            }
+            else{
+
+
+                String t3[] = valString.split(";");
+                Log.d("T",t3.length+"");
+
+                dataString.clear();
+
+                for (int i = 0; i < t3.length; i++){
+                    Log.d("T",t3[i]);
+                    String t4[] = t3[i].split("-");
+
+                    DataObject obj=null;
+                    if (t4.length == 3) {
+                        obj = new DataObject(t4[0],
+                                t4[1] , t4[2]);
+                        dataString.add(obj);
+
+                    }
+                    if (t4.length == 2) {
+                        obj = new DataObject(t4[0],
+                                t4[1] , "#9");
+                        dataString.add(obj);
+                    }
+
+                }
+
+
+
+            }
+
+
+
+
+          //String key = "hh:mm:ss-hh:mm:ss1;hh:mm:ss-hh:mm:ss2";
+
+            ArrayList<String> stArr = new ArrayList<String>();
+
+            String st3 = mService.getTitle();
+            String st4 = mService.getCurrentMediaLocation();
+
+            String st7 = Tools.millisToString(mService.getLength());
+            String st8 = convVerStr(st7);
+            if (dataString.size() == 0) {
+                stArr = new ArrayList<String>();
+                stArr.add("00:00:00-"+st8+"-#9");
+            }
+            else{
+
+
+                for (int i = 0; i < dataString.size();i++){
+                    // MyRecyclerViewAdapter.DataObjectHolder.get(i)
+                    DataObject d1 = dataString.get(i);
+                    String st1 = d1.getmText1();
+                    String en2 = d1.getmText2();
+                    String nt2 = d1.getmText3();
+                    stArr.add(st1+"-"+en2+"-"+nt2);
+                }
+            }
+            //FragmentManager fm = getFragmentManager();
+            //http://stackoverflow.com/questions/13443811/cannot-call-getsupportfragmentmanager-from-activity
+            FragmentManager fm = getActivity().getSupportFragmentManager();
+
+            Bundle args = new Bundle();
+            //args.putString("key", stringVal);
+            args.putString("type", "audio");
+            args.putString("title",st3);
+            args.putStringArrayList("key", stArr);
+            args.putString("path",st4);
+
+            int time = (int) mService.getTime();
+            String st9 = convVerStr(Tools.millisToString(time));
+            args.putString("cTime",st9);
+            args.putString("eTime",st8);
+            strEtime = st8;
+            sstrEtime = strEtime;
+
+            //args.putStringArrayList("key2",x);
+            ClipFragment dFragment1 = new ClipFragment();
+            dFragment1.show(fm, "Dialog Fragment");
+            dFragment1.setArguments(args);
+
+            //dFragment1.setListener(this);
+
+        }
+        catch(Exception e)
+        {
+            Log.i("err",e.toString());
+
+            Toast.makeText(getActivity(), "Error opening VlcClipText",
+                    Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
+
+/*
+        FragmentManager fm = getFragmentManager();
+        ClipFragment dFragment = new ClipFragment();
+        // Show DialogFragment
+        dFragment.show(fm, "Dialog Fragment");
+*/
+
+
+
+        //dismiss();
+
+
     }
 
     public boolean onStopClick(View view) {
@@ -693,6 +1212,7 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
                         if(forward)
                             onNextClick(v);
                         else
+                            //onTrim(v);
                             onPreviousClick(v);
                     } else {
                         if(forward) {
@@ -704,6 +1224,7 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
                             if(possibleSeek > 0)
                                 mService.setTime(possibleSeek);
                             else
+                                //onTrim(v);
                                 onPreviousClick(v);
                         }
                     }
