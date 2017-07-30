@@ -745,6 +745,7 @@ public class AudioPlayer extends PlaybackServiceFragment implements PlaybackServ
         return validStr;
     }
 
+    //test
 
 
     public void onTrim(View view){
